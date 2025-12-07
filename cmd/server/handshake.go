@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"fmt"
 	"log/slog"
@@ -44,6 +45,11 @@ func doHandshake(conn *msg.Conn) error {
 		return fmt.Errorf("send hello: %w", err)
 	}
 
+	_, err = receivePremaster(conn)
+	if err != nil {
+		return fmt.Errorf("receive premaster: %w", err)
+	}
+
 	slog.Info("handshake finished")
 	fmt.Println()
 	return nil
@@ -69,4 +75,20 @@ func sendHello(conn *msg.Conn) ([]byte, error) {
 	}
 	slog.Debug("sent 'hello' message", "random", fmt.Sprintf("%x", random))
 	return random, nil
+}
+
+func receivePremaster(conn *msg.Conn) ([]byte, error) {
+	premaster, err := conn.Receive()
+	if err != nil {
+		return nil, err
+	}
+	slog.Debug("received premaster", "encryptedSecret", fmt.Sprintf("%x", premaster))
+
+	secret, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, privKey, premaster, nil)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt premaster: %w", err)
+	}
+
+	slog.Debug("decrypted premaster", "secret", fmt.Sprintf("%x", secret))
+	return secret, nil
 }

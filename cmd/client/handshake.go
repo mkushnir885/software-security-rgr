@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -23,9 +24,14 @@ func doHandshake(conn *msg.Conn) error {
 		return fmt.Errorf("send hello: %w", err)
 	}
 
-	_, _, err = receiveHello(conn)
+	_, pubKey, err := receiveHello(conn)
 	if err != nil {
 		return fmt.Errorf("receive hello: %w", err)
+	}
+
+	_, err = sendPremaster(conn, pubKey)
+	if err != nil {
+		return fmt.Errorf("send premaster: %w", err)
 	}
 
 	slog.Info("handshake finished")
@@ -68,4 +74,23 @@ func receiveHello(conn *msg.Conn) ([]byte, *rsa.PublicKey, error) {
 	slog.Debug("received 'hello' message", "random", fmt.Sprintf("%x", serverRandom), "publicKey", "\\")
 	logger.PrintlnPubKeyPem(pubKeyBytes)
 	return serverRandom, pubKey, nil
+}
+
+func sendPremaster(conn *msg.Conn, pubKey *rsa.PublicKey) ([]byte, error) {
+	secret := make([]byte, randomLen)
+	if _, err := rand.Read(secret); err != nil {
+		return nil, fmt.Errorf("generate random bytes: %w", err)
+	}
+	slog.Debug("unencrypted premaster", "secret", fmt.Sprintf("%x", secret))
+
+	premaster, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, pubKey, secret, nil)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt premaster: %w", err)
+	}
+
+	if err := conn.Send(premaster); err != nil {
+		return nil, err
+	}
+	slog.Debug("sent premaster", "encryptedSecret", fmt.Sprintf("%x", premaster))
+	return secret, nil
 }
