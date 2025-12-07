@@ -1,11 +1,34 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"fmt"
 	"log/slog"
 
+	"github.com/mkushnir885/software-security-rgr/logger"
 	"github.com/mkushnir885/software-security-rgr/msg"
 )
+
+const randomLen = 16
+
+var privKey *rsa.PrivateKey
+var pubKeyBytes []byte
+
+func init() {
+	var err error
+	privKey, err = rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(fmt.Errorf("generate keypair: %w", err))
+	}
+	pubKeyBytes, err = x509.MarshalPKIXPublicKey(&privKey.PublicKey)
+	if err != nil {
+		panic(fmt.Errorf("marshal public key: %w", err))
+	}
+	fmt.Println("generated private/public keypair:")
+	logger.PrintlnPubKeyPem(pubKeyBytes)
+}
 
 func doHandshake(conn *msg.Conn) error {
 	fmt.Println()
@@ -14,6 +37,11 @@ func doHandshake(conn *msg.Conn) error {
 	_, err := receiveHello(conn)
 	if err != nil {
 		return fmt.Errorf("receive hello: %w", err)
+	}
+
+	_, err = sendHello(conn)
+	if err != nil {
+		return fmt.Errorf("send hello: %w", err)
 	}
 
 	slog.Info("handshake finished")
@@ -28,4 +56,17 @@ func receiveHello(conn *msg.Conn) ([]byte, error) {
 	}
 	slog.Debug("received 'hello' message", "random", fmt.Sprintf("%x", clientRandom))
 	return clientRandom, nil
+}
+
+func sendHello(conn *msg.Conn) ([]byte, error) {
+	random := make([]byte, randomLen)
+	if _, err := rand.Read(random); err != nil {
+		return nil, fmt.Errorf("generate random bytes: %w", err)
+	}
+
+	if err := conn.Send(append(random, pubKeyBytes...)); err != nil {
+		return nil, err
+	}
+	slog.Debug("sent 'hello' message", "random", fmt.Sprintf("%x", random))
+	return random, nil
 }
