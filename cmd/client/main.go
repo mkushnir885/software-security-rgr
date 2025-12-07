@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mkushnir885/software-security-rgr/logger"
+	"github.com/mkushnir885/software-security-rgr/msg"
 )
 
 func main() {
@@ -23,4 +24,5 @@ func main() {
 	}()
 
 	slog.Info("connected to server")
+	doHandshake(msg.NewConn(conn))
 }

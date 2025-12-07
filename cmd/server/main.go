@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/mkushnir885/software-security-rgr/logger"
+	"github.com/mkushnir885/software-security-rgr/msg"
 )
 
 func main() {
@@ -46,6 +47,7 @@ func main() {
 				}()
 
 				slog.Info("new client connected")
+				doHandshake(msg.NewConn(conn))
 			})
 		}
 	}()
