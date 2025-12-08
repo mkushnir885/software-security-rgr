@@ -15,23 +15,23 @@ import (
 
 const randomLen = 16
 
-func doHandshake(conn *msg.Conn) error {
+func doHandshake(conn *msg.Conn) (*msg.SecureConn, error) {
 	fmt.Println()
 	slog.Info("handshake started")
 
 	random, err := sendHello(conn)
 	if err != nil {
-		return fmt.Errorf("send hello: %w", err)
+		return nil, fmt.Errorf("send hello: %w", err)
 	}
 
 	serverRandom, pubKey, err := receiveHello(conn)
 	if err != nil {
-		return fmt.Errorf("receive hello: %w", err)
+		return nil, fmt.Errorf("receive hello: %w", err)
 	}
 
 	secret, err := sendPremaster(conn, pubKey)
 	if err != nil {
-		return fmt.Errorf("send premaster: %w", err)
+		return nil, fmt.Errorf("send premaster: %w", err)
 	}
 
 	sessionKey := sha256.Sum256(append(append(random, serverRandom...), secret...))
@@ -39,22 +39,22 @@ func doHandshake(conn *msg.Conn) error {
 
 	secureConn, err := msg.NewSecureConn(conn, sessionKey)
 	if err != nil {
-		return fmt.Errorf("make conn secure: %w", err)
+		return nil, fmt.Errorf("make conn secure: %w", err)
 	}
 
 	if err = secureConn.Send([]byte("ready")); err != nil {
-		return fmt.Errorf("send ready: %w", err)
+		return nil, fmt.Errorf("send ready: %w", err)
 	}
 	slog.Debug("sent 'ready' message")
 
 	if message, err := secureConn.Receive(); err != nil || string(message) != "ready" {
-		return fmt.Errorf("receive ready: %w", err)
+		return nil, fmt.Errorf("receive ready: %w", err)
 	}
 	slog.Debug("received 'ready' message")
 
 	slog.Info("handshake finished")
 	fmt.Println()
-	return nil
+	return secureConn, nil
 }
 
 func sendHello(conn *msg.Conn) ([]byte, error) {
