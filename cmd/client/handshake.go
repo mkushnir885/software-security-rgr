@@ -19,20 +19,38 @@ func doHandshake(conn *msg.Conn) error {
 	fmt.Println()
 	slog.Info("handshake started")
 
-	_, err := sendHello(conn)
+	random, err := sendHello(conn)
 	if err != nil {
 		return fmt.Errorf("send hello: %w", err)
 	}
 
-	_, pubKey, err := receiveHello(conn)
+	serverRandom, pubKey, err := receiveHello(conn)
 	if err != nil {
 		return fmt.Errorf("receive hello: %w", err)
 	}
 
-	_, err = sendPremaster(conn, pubKey)
+	secret, err := sendPremaster(conn, pubKey)
 	if err != nil {
 		return fmt.Errorf("send premaster: %w", err)
 	}
+
+	sessionKey := sha256.Sum256(append(append(random, serverRandom...), secret...))
+	slog.Debug("created session key", "key", fmt.Sprintf("%x", sessionKey))
+
+	secureConn, err := msg.NewSecureConn(conn, sessionKey)
+	if err != nil {
+		return fmt.Errorf("make conn secure: %w", err)
+	}
+
+	if err = secureConn.Send([]byte("ready")); err != nil {
+		return fmt.Errorf("send ready: %w", err)
+	}
+	slog.Debug("sent 'ready' message")
+
+	if message, err := secureConn.Receive(); err != nil || string(message) != "ready" {
+		return fmt.Errorf("receive ready: %w", err)
+	}
+	slog.Debug("received 'ready' message")
 
 	slog.Info("handshake finished")
 	fmt.Println()
