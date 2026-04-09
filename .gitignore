@@ -7,3 +7,6 @@ devenv.local.yaml
 
 # Custom Neovim config
 .nvim.lua
+
+# Log files (generated at runtime)
+log/

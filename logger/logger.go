@@ -1,28 +1,36 @@
 package logger
 
 import (
-	"encoding/pem"
 	"fmt"
 	"log/slog"
 	"os"
-
-	"github.com/lmittmann/tint"
+	"path/filepath"
 )
 
-func Init() {
-	slog.SetDefault(slog.New(
-		tint.NewHandler(os.Stdout, &tint.Options{
-			Level:      slog.LevelDebug,
-			TimeFormat: "15:04:05.000",
-		}),
-	))
+func newFileLogger(path string) *slog.Logger {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		panic(fmt.Errorf("create log dir: %w", err))
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		panic(fmt.Errorf("open log file %s: %w", path, err))
+	}
+	h := slog.NewTextHandler(f, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.MessageKey {
+				a.Key = "event"
+			}
+			return a
+		},
+	})
+	return slog.New(h)
 }
 
-func PrintlnPubKeyPem(pubKeyBytes []byte) {
-	fmt.Print(string(
-		pem.EncodeToMemory(&pem.Block{
-			Type:  "PUBLIC KEY",
-			Bytes: pubKeyBytes,
-		}),
-	))
+func NewNodeLogger(nodeID int) *slog.Logger {
+	return newFileLogger(fmt.Sprintf("log/node%d.log", nodeID))
+}
+
+func NewCALogger() *slog.Logger {
+	return newFileLogger("log/nodeCA.log")
 }
